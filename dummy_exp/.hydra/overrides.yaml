@@ -1,0 +1,13 @@
+- +trainer.fast_dev_run=False
+- trainer.accelerator=gpu
+- trainer.devices=4
+- trainer.num_nodes=1
+- +trainer.log_every_n_steps=5
+- data=qm9
+- data.batch_size=1024
+- data.datadir=/lustre/fsn1/projects/rech/aik/ukf79qj/data/qm9
+- data.max_epochs=500
+- general.conditioning=True
+- general.checkpoint_path=null
+- lightning_module/module/denoising_module=mixed_attention_gtf
+- lightning_module/module/loss_functions=CE_train_VLB_val

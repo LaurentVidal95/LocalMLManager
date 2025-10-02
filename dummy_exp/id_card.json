@@ -1,0 +1,46 @@
+{
+  "id": "dummy_exp",
+  "stable_hash": "3ced88d3",
+  "created_at": "2025-10-02T11:07:31.427875",
+  "description": "Trainings of GASP [REF] using the discrete graph diffusion method.\n",
+  "profile": {
+    "keep_keys": [
+      "denoiser.",
+      "data.name",
+      "data.batch_size"
+    ],
+    "id_mode": "sequential",
+    "hash_length": 8,
+    "tags": [
+      "gasp-diff",
+      "QM9",
+      "small"
+    ],
+    "extra_files": [
+      "logs/*.log",
+      "best*.txt"
+    ]
+  },
+  "selected_fields": {
+    "data.name": "qm9",
+    "data.batch_size": 1024
+  },
+  "files": {
+    "checkpoints": [
+      "/Users/laurentvidal/Programs/deep_learning/expman/dummy_exp/checkpoints/epoch=364-loss_validation=1.32.ckpt",
+      "/Users/laurentvidal/Programs/deep_learning/expman/dummy_exp/checkpoints/epoch=394-loss_validation=1.32.ckpt"
+    ],
+    "best": "/Users/laurentvidal/Programs/deep_learning/expman/dummy_exp/checkpoints/epoch=364-loss_validation=1.32.ckpt",
+    "wandb": "/Users/laurentvidal/Programs/deep_learning/expman/dummy_exp/wandb"
+  },
+  "meta": {
+    "user": "laurentvidal",
+    "host": "MacBook-Pro-de-Laurent.local",
+    "cwd": "/Users/laurentvidal/Programs/deep_learning/expman/notebooks",
+    "git_commit": null,
+    "python_version": "3.12.9",
+    "torch_version": null,
+    "lightning_version": null,
+    "wandb_version": null
+  }
+}

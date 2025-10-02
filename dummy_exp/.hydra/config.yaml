@@ -1,0 +1,212 @@
+data:
+  _target_: gasp_diff.data.qm9.QM9DataModule
+  _recursive_: true
+  name: qm9
+  datadir: /lustre/fsn1/projects/rech/aik/ukf79qj/data/qm9
+  root: ${data.datadir}
+  molecular_encoder:
+    _target_: gasp_diff.data.common.MolecularEncoder
+    allowed_atoms: null
+    implicit_hydrogen: true
+    sort_edges: true
+  filter: true
+  pre_filter:
+  - _target_: gasp_diff.data.filtering.prefilters.AllowedElements
+    allowed_elements:
+    - C
+    - 'N'
+    - O
+    - F
+  - _target_: gasp_diff.data.filtering.prefilters.ReversibleGraph
+    verbose: false
+    molecular_encoder: ${data.molecular_encoder}
+  train_dataset:
+    _target_: gasp_diff.data.qm9.QM9Dataset
+    root: ${data.root}
+    stage: train
+    filter_dataset: ${data.filter}
+    pre_filter: ${data.pre_filter}
+    molecular_encoder: ${data.molecular_encoder}
+  val_dataset:
+    _target_: gasp_diff.data.qm9.QM9Dataset
+    root: ${data.root}
+    stage: val
+    filter_dataset: ${data.filter}
+    pre_filter: ${data.pre_filter}
+    molecular_encoder: ${data.molecular_encoder}
+  test_dataset:
+    _target_: gasp_diff.data.qm9.QM9Dataset
+    root: ${data.root}
+    stage: test
+    filter_dataset: ${data.filter}
+    pre_filter: ${data.pre_filter}
+    molecular_encoder: ${data.molecular_encoder}
+  batch_size: 1024
+  max_epochs: 500
+  num_workers: 9
+  random_subset: null
+  pin_memory: false
+lightning_module:
+  _target_: gasp_diff.module.GraphGenerativeLightningModule
+  optimizer_partial:
+    _target_: torch.optim.AdamW
+    _partial_: true
+    lr: 0.0002
+    amsgrad: true
+    weight_decay: 1.0e-12
+  scheduler_partial:
+  - scheduler:
+      _target_: torch.optim.lr_scheduler.ReduceLROnPlateau
+      _partial_: true
+      factor: 0.6
+      patience: 100
+      min_lr: 1.0e-06
+    interval: epoch
+    frequency: 1
+    monitor: loss_train
+    strict: true
+  module:
+    _target_: gasp_diff.module.module.GraphGenerativeModule
+    timestep_sampler:
+      _target_: gasp_diff.module.noising_process.timestep_sampler.UniformTimestepSampler
+      t_min: 1.0e-05
+      t_max: 1.0
+    loss_functions:
+      train:
+        _target_: gasp_diff.module.metrics.losses.GraphCrossEntropyLoss
+        edge_penalisation: 5.0
+        global_features_penalisation: 0.0
+      validation:
+        _target_: gasp_diff.module.metrics.losses.GraphVLBLoss
+        edge_penalisation: 1.0
+        global_features_penalisation: 0.0
+    noising_process:
+      _target_: gasp_diff.module.noising_process.GraphD3PM
+      _recursive_: true
+      _partial_: true
+      noise_schedule:
+        _target_: gasp_diff.module.noising_process.noise_schedule.create_noise_schedule
+        kind: cosine
+        num_steps: 500
+    denoising_module:
+      _target_: gasp_diff.module.denoising_module.GraphTransformerDenoiser
+      _recursive_: true
+      name: 'Graph Transformer denoiser with node-wise attention score, adding edge
+        and features
+
+        information via FILM layers, as proposed in DiGress [REF].
+
+        Reduced size (~300K parameters) for first tests.
+
+        Use CDI as in [REF TAKAHARA] for time and property conditioning.
+
+        '
+      graph_transformer_layer:
+        _target_: gasp_diff.module.denoising_module.GraphTransformerLayer
+        attention:
+          _target_: gasp_diff.module.denoising_module.attention.MixedAttention
+          nodes_emb_dim: 64
+          edges_emb_dim: 64
+          features_emb_dim: 32
+          n_attention_heads: 4
+        dropout_prob: 0.1
+        layer_norm_eps: 1.0e-05
+      n_transformer_layers: 6
+      graph_embedding_module:
+        _target_: gasp_diff.module.denoising_module.mlps.GraphMLP
+        input_dims:
+          nodes: 12
+          edges: 5
+          features: 13
+        hidden_dims:
+          nodes: 128
+          edges: 128
+          features: 64
+        output_dims:
+          nodes: 64
+          edges: 64
+          features: 32
+        act_fn_1:
+          _target_: torch.nn.ReLU
+          inplace: false
+        act_fn_2:
+          _target_: torch.nn.ReLU
+          inplace: false
+      graph_decoder_module:
+        _target_: gasp_diff.module.denoising_module.mlps.GraphMLP
+        input_dims:
+          nodes: 64
+          edges: 64
+          features: 32
+        hidden_dims:
+          nodes: 128
+          edges: 128
+          features: 64
+        output_dims:
+          nodes: 4
+          edges: 5
+          features: 0
+        act_fn_1:
+          _target_: torch.nn.ReLU
+        act_fn_2: null
+      time_embedding_module:
+        _target_: gasp_diff.module.denoising_module.conditioning.TimeSinusoidalEncoder
+        dim: 32
+        min_t: 1.0e-05
+        max_t: 1.0
+      use_conditioning: ${general.conditioning}
+      property_embedding_modules: {}
+trainer:
+  _target_: lightning.Trainer
+  accelerator: gpu
+  devices: 4
+  num_nodes: 1
+  precision: 32
+  max_epochs: ${data.max_epochs}
+  limit_train_batches: 1.0
+  check_val_every_n_epoch: 5
+  accumulate_grad_batches: 1
+  gradient_clip_val: 0.5
+  gradient_clip_algorithm: value
+  strategy:
+    _target_: lightning.pytorch.strategies.ddp.DDPStrategy
+    find_unused_parameters: true
+  logger:
+    _target_: lightning.pytorch.loggers.WandbLogger
+    project: spectrum-to-graph
+    job_type: train
+    resume: allow
+    name: ${general.name}-${now:%Y-%m-%d}/${now:%H-%M-%S}
+    id: ${general.wandb_id}
+    offline: ${general.wandb_offline}
+    settings:
+      _target_: wandb.Settings
+      start_method: fork
+      _save_requirements: false
+  callbacks:
+  - _target_: lightning.pytorch.callbacks.LearningRateMonitor
+    logging_interval: step
+    log_momentum: false
+  - _target_: lightning.pytorch.callbacks.ModelCheckpoint
+    monitor: loss_validation
+    mode: min
+    save_top_k: 3
+    save_last: true
+    dirpath: ${general.checkpoint_save_dir}
+    verbose: false
+    every_n_epochs: 1
+    filename: '{epoch}-{loss_validation:.2f}'
+  - _target_: lightning.pytorch.callbacks.TQDMProgressBar
+    refresh_rate: 50
+  fast_dev_run: false
+  log_every_n_steps: 5
+general:
+  name: gasp-diff-run
+  conditioning: true
+  target_properties:
+    spectrum_ir: false
+    mass: false
+  checkpoint_save_dir: ${hydra:run.dir}/checkpoints
+  checkpoint_path: null
+  wandb_offline: true
+  wandb_id: ${oc.env:WANDB_ID, null}
