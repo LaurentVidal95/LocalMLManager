@@ -63,7 +63,7 @@ def list_experiments(
     """
     exp_root = clean_path(exp_root)
     exps = []
-    for exp_dir in sorted(exp_root.glob("exp_*")):
+    for exp_dir in sorted(exp_root.glob("*")):
         exps.append(experiment_summary(exp_dir, id_card_name=id_card_name))
 
     df = pd.DataFrame(exps)
@@ -77,32 +77,3 @@ def list_experiments(
                 df = df[df[key] == val]
 
     return df.reset_index(drop=True)
-
-# def list_checkpoints(exp_dir) -> List[str]:
-#     """
-#     Search for .ckpt / .pt / .pth files under
-#     common places and return sorted list (by mtime desc).
-#     """
-#     patterns = ["**/*.ckpt", "**/*.pt", "**/*.pth"]
-#     found = []
-#     for pat in patterns:
-#         for p in exp_dir.glob(pat):
-#             if p.is_file():
-#                 found.append(p)
-#     # sort newest first
-#     found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-#     ckpts = [str(ckpt) for ckpt in found]
-#     return ckpts if ckpts else None
-
-
-# def find_wandb_dir(exp_dir: Path) -> Optional[str]:
-#     # wandb usually creates a "wandb" folder with run-id subfolders
-#     cand = exp_dir / "wandb"
-#     if cand.exists() and cand.is_dir():
-#         return str(cand)
-#     # sometimes logs are in "log" or "wandb/run-..."
-#     for p in exp_dir.glob("**/wandb*"):
-#         if p.is_dir():
-#             return str(p)
-#     return None
-

@@ -1,4 +1,5 @@
-# expman/cli.py
+import os
+from pathlib import Path
 import typer
 import json
 import yaml
@@ -8,31 +9,55 @@ from tabulate import tabulate
 
 from expman.core import ExperimentProfile, create_experiment
 from expman.navigation import list_experiments, experiment_summary
+from expman.utils import clean_path
+
+def get_default_exp_root():
+    return clean_path(os.environ.get("EXPROOT", "~/experiments"))
+
+def get_default_profile():
+    return os.environ.get("EXPPROFILE", None)
 
 app = typer.Typer(help="A simple ML experiment manager in full CLI")
 
 @app.command()
 def create(
-    profile: str = typer.Option(..., "--profile", help="Path to experiment.profile YAML"),
+    profile: str = typer.Option(None, "--profile", \
+                    help="Path to experiment.profile YAML (default: $EXPPROFILE)"),
+    exp_root: str = typer.Option(None, "--exp-root",\
+            help="Root directory for experiments (default: ~/experiments or $EXPROOT)"),
     cfg: str = typer.Option(None, "--cfg", help="Path to Hydra config snapshot"),
     input_dir: str = typer.Option(..., "--input-dir", help="Original run directory"),
-    exp_root: str = typer.Option("~/experiments", "--exp-root",\
-                                 help="Root directory for experiments"),
 ):
-    """Wrap an existing run into an experiment folder with id_card.json"""
+    """
+    Wrap an existing run into an experiment folder with id_card.json
+    """
+    exp_root = clean_path(exp_root or get_default_exp_root())
+    profile = profile or get_default_profile()
     prof = ExperimentProfile(**yaml.safe_load(open(profile)))
     cfg_dict = {}
     if cfg:
         cfg_dict = yaml.safe_load(open(cfg))
+    else:
+        try:
+            cfg_path = clean_path(input_dir) / ".hydra/config.yaml"
+            cfg_dict = yaml.safe_load(open(cfg_path))
+        except:
+            raise FileNotFoundError(
+                f"Config file not found automatically. Please provide a location with --cfg"
+            )
+
     card = create_experiment(prof, cfg_dict, exp_root, input_dir)
     typer.echo(f"✅ Created {card['id']} at {Path(exp_root).expanduser() / card['id']}")
 
 @app.command()
 def ls(
-    exp_root: str = typer.Argument("~", help="Path to experiment root"),
+    exp_root: str = typer.Argument(None,
+      help="Path to experiment root (default ~/experiments or $EXPROOT"),
     filter: List[str] = typer.Option(None, "--filter", help="Filter like key=value"),
 ):
     """List experiments (with optional filters)."""
+    exp_root = clean_path(exp_root or get_default_exp_root())
+
     filters = {}
     if filter:
         for f in filter:
@@ -48,9 +73,14 @@ def ls(
         typer.echo(tabulate(df, headers="keys", tablefmt="github", showindex=False))
 
 @app.command()
-def ckpt(exp_id: str, exp_root: str = "~/experiments", ckpt_type: str = "best"):
+def ckpt(exp_id: str,
+         exp_root: str = None,
+         ckpt_type: str = "best",
+         ):
     """Get checkpoint path from an experiment"""
-    exp_dir = Path(exp_root).expanduser() / exp_id
+    exp_root = clean_path(exp_root or get_default_exp_root())
+    exp_dir = exp_root / exp_id
+
     card_file = exp_dir / "id_card.json"
     if not card_file.exists():
         typer.echo("No id_card.json found")
@@ -69,22 +99,22 @@ def ckpt(exp_id: str, exp_root: str = "~/experiments", ckpt_type: str = "best"):
             typer.echo("No checkpoints found")
 
 @app.command()
-def inspect_id_card(exp_id: str, exp_root: str = "~/experiments"):
+def inspect_id_card(exp_id: str,
+                    exp_root: str = None):
     """Show id_card.json"""
-    full_id = "exp_"+exp_id
-    card_file = Path(exp_root).expanduser() / full_id / "id_card.json"
+    exp_root = clean_path(exp_root or get_default_exp_root())
+    card_file = Path(exp_root).expanduser() / exp_id / "id_card.json"
     typer.echo(json.dumps(json.load(open(card_file)), indent=2))
 
 @app.command()
 def show(
     exp_id: str = typer.Argument(..., help="Experiment ID (e.g. 03a48559)"),
-    exp_root: str = typer.Option("~/experiments", "--exp-root", help="Root directory"),
+    exp_root: str = typer.Option(None, "--exp-root", help="Root directory"),
     id_card_name=typer.Option("id_card.json", "--id-card-name", help="Name of the id file"),    
 ):
     """Show details of a single experiment (summary + checkpoints)."""
-    root = Path(exp_root).expanduser()
-    exp_id = "exp_" + exp_id
-    exp_dir = root / exp_id
+    exp_root = clean_path(exp_root or get_default_exp_root())
+    exp_dir = exp_root / exp_id
 
     # --- a) summary ---
     summary = experiment_summary(exp_dir, id_card_name)

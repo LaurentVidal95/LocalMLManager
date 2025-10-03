@@ -74,16 +74,16 @@ class ExperimentProfile:
         root.mkdir(parents=True, exist_ok=True)
 
         if self.id_mode == "sequential":
-            existing = [exp.name for exp in root.glob("exp_*") if exp.is_dir()]
-            nums = [int(name.split("_")[1]) for name in existing if name.split("_")[1].isdigit()]
+            existing = [exp.name for exp in root.glob(".") if exp.is_dir()]
+            nums = [int(name) for name in existing if name.isdigit()]
             next_num = max(nums) + 1 if nums else 1
-            return f"exp_{next_num:04d}"
+            return f"{next_num:04d}"
 
         elif self.id_mode == "hash":
-            return "exp_" + self._hash()
+            return self._hash()
 
         elif self.id_mode == "timestamp":
-            return "exp_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         else:
             raise ValueError(f"unknown id_mode: {self.id_mode}")
 
@@ -109,32 +109,6 @@ class ExperimentProfile:
         except Exception:
             pass
         return info
-
-    # def update_id_card_with_artifacts(self, exp_dir: str | Path) -> Dict[str, Any]:
-    #     """Open id_card.json, update with discovered ckpts/wandb etc, write back."""
-    #     exp_dir = Path(exp_dir).expanduser()
-    #     id_card_path = exp_dir / self.id_card_name
-    #     if not id_card_path.exists():
-    #         raise FileNotFoundError(f"{id_card_path} not found")
-    #     with open(id_card_path, "r") as f:
-    #         id_card = json.load(f)
-
-    #     # refresh artifact lists
-    #     ckpts = find_checkpoints(exp_dir)
-    #     if ckpts:
-    #         id_card.setdefault("files", {})["checkpoints"] = ckpts
-    #         id_card["files"]["best"] = ckpts[0]
-
-    #     wandb_dir = find_wandb_dir(exp_dir)
-    #     if wandb_dir:
-    #         id_card.setdefault("files", {})["wandb"] = wandb_dir
-
-    #     # update write
-    #     tmp = id_card_path.with_suffix(".json.tmp")
-    #     with open(tmp, "w") as f:
-    #         json.dump(id_card, f, indent=2, sort_keys=False, default=str)
-    #     tmp.replace(id_card_path)
-    #     return id_card
 
 def create_id_card(
         profile: ExperimentProfile,
@@ -162,9 +136,11 @@ def create_id_card(
             **git_info,  # merge commit/branch/remote
         },
         "files": {
-            "checkpoints": str(exp_dir / "checkpoints") if (exp_dir / "checkpoints").exists() else None,
+            "checkpoints": str(exp_dir / "checkpoints") if (exp_dir / "checkpoints").exists() \
+            else None,
             "logs": str(exp_dir / "wandb") if (exp_dir / "wandb").exists() else None,
-            "config": str(exp_dir / ".hydra/config.yaml") if (exp_dir / ".hydra/config.yaml").exists() else None,
+            "config": str(exp_dir / ".hydra/config.yaml") \
+                   if (exp_dir / ".hydra/config.yaml").exists() else None,
         },
     }
     
